@@ -8,6 +8,7 @@ CL-USER> (defvar foo (cl-iterators:make-iterator
                     :start 0 
                     :inc 2 
                     :id #'(lambda(x) (* x x))))
+                    
 
 CL-USER> (cl-iterators:take 20 foo)
 (0 4 16 36 64 100 144 196 256 324 400 484 576 676 784 900 1024 1156 1296 1444)
