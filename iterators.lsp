@@ -17,25 +17,28 @@
   ((init :initform (error "Stop iteration, iteration has exhausted."))))
 
 (defclass iterator()
-  ((start :initform 0 :initarg :start :accessor :iterator-start)
-   (index :initform 0 :accessor :iterator-index)
-   (end :initform -1 :initarg :end :accessor :iterator-end)
-   (increment :initform 1 :initarg :inc :accessor :iterator-inc)
+  ((start :initform 0 :initarg :start)
+   (index :initform 0)
+   (end :initform -1 :initarg :end)
+   (increment :initform 1 :initarg :inc)
    (id :initform #'identity :initarg :id)
    (quiet :initform T :initarg :quiet)
    (cyclic :initform nil :initarg :cyclic)
-   (values :initform nil :initarg :values)))
+   (values :initform nil :initarg :values)
+   (bound-check :initform #'<= :initarg :reverse)
+   (comparer :initform #'(lambda(n values) (nth n values)))))
 
 (defmethod reset((iter iterator))
   (with-slots (start index) iter
     (setf index start)))
 
 (defmethod next((iter iterator))
-  (with-slots (index end increment id quiet values cyclic) iter
-    (if (or (<= index end) (eq end -1))
+  (with-slots (index end increment id quiet cyclic
+                     comparer bound-check) iter
+    (if (or (funcall bound-check index end) (eq end -1))
         (let ((current
                (funcall id (if values
-                               (nth index values)
+                               (funcall comparer index values)
                                index))))
           (incf index increment)
           current)
@@ -69,13 +72,22 @@
      collect (cons i j)))
 
 (defmacro make-iterator(&key (start 0) (end -1) (inc 1)
-                          (id #'identity) (values ()) (cyclic Nil))
+                          (id #'identity) (values ()) (cyclic Nil) (reverse nil))
   `(let ((tmp (make-instance 'iterator :start ,start
                              :end (if (null ,values)
                                       ,end
                                       (1- (length ,values)))
                              :inc ,inc :id ,id :values ,values :cyclic ,cyclic)))
-     (setf (slot-value tmp 'index) ,start)
+     (with-slots (start end index values increment comparer bound-check) tmp
+       (when (not (listp values))
+         (setf comparer #'(lambda(n seq) (elt seq n))))
+       (if ,reverse
+         (setf start end
+               index end
+               end ,start
+               bound-check #'>=
+               increment (* -1 ,inc))
+         (setf index start)))
      tmp))
          
 (defmacro with-iterator((name &key (start 0) (end -1) (increment 1)
@@ -87,5 +99,5 @@
 
 (defmethod to-string((iter iterator))
   (with-slots (start end increment id quiet values cyclic) iter
-    (format nil "start: ~A, end: ~A, quiet: ~A, inc: ~A, cyclic: ~A, values: ~{~A~^, ~}"
+    (format T "start: ~A, end: ~A, quiet: ~A, inc: ~A, cyclic: ~A, values: ~A ~%"
             start end quiet increment cyclic values)))
