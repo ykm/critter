@@ -17,16 +17,26 @@
   ((init :initform (error "Stop iteration, iteration has exhausted."))))
 
 (defclass iterator()
-  ((start :initform 0 :initarg :start)
-   (index :initform 0)
-   (end :initform -1 :initarg :end)
-   (increment :initform 1 :initarg :inc)
-   (id :initform #'identity :initarg :id)
-   (quiet :initform T :initarg :quiet)
-   (cyclic :initform nil :initarg :cyclic)
-   (values :initform nil :initarg :values)
-   (bound-check :initform #'<= :initarg :reverse)
-   (comparer :initform #'(lambda(n values) (nth n values)))))
+  ((start :initform 0 :initarg :start
+          :documentation "The start of the iteration, either an index value or integer value to mark the start of iteration")
+   (index :initform 0
+          :documentation "the current index of the iteration") 
+   (end :initform -1 :initarg :end
+        :documentation "The end of the iteration, -1 denotes an infinite iteration, for lists/sequences, the sequence length limits the iteration")
+   (increment :initform 1 :initarg :inc
+              :documentation "the increment of the iteration")
+   (id :initform #'identity :initarg :id
+       :documentation "Applied over each value before returning to the caller.")
+   (quiet :initform T :initarg :quiet
+          :documentation "Whether to raise an error when iterations are exhausted")
+   (cyclic :initform nil :initarg :cyclic
+           :documentation "Whether the iteration is cyclic, in case where values are supplied the sequence re-iterated otherwise the iteration resets the index to start")
+   (values :initform nil :initarg :values
+           :documentation "A list/sequence of values to be iterated")
+   (bound-check :initform #'<= :initarg :reverse
+                :documentation "When T, direction of iteration is reversed")
+   (comparer :initform #'(lambda(n values) (nth n values))
+             :documentation "Function to access to individual members of a values, #'nth for lists, #'elt for others")))
 
 (defmethod reset((iter iterator))
   (with-slots (start index) iter
@@ -34,7 +44,7 @@
 
 (defmethod next((iter iterator))
   (with-slots (index end increment id quiet cyclic
-                     comparer bound-check) iter
+                     comparer bound-check values) iter
     (if (or (funcall bound-check index end) (eq end -1))
         (let ((current
                (funcall id (if values
@@ -72,7 +82,7 @@
      collect (cons i j)))
 
 (defmacro make-iterator(&key (start 0) (end -1) (inc 1)
-                          (id #'identity) (values ()) (cyclic Nil) (reverse nil))
+                          (id #'identity) (values ()) (cyclic nil) (reverse nil))
   `(let ((tmp (make-instance 'iterator :start ,start
                              :end (if (null ,values)
                                       ,end
