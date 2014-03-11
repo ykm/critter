@@ -1,35 +1,59 @@
-cl-iterator
-===========
+cl-iterators
+============
 
-Simple iterators with common lisp
+cl-iterators allows us to create an iterator over lists or sequences. Following functions have been included in the initial API
 
-Infinite iterator:
+(take n iter)
+-------------
+Take n elements from the iterator. The return value is a list of the values accumulated. However, in future, we might need have to retain type of the values supplied during the iterator creation.
+
+(take-while pred iter)
+----------------------
+take from iter while predicate 'pred' is true.
+
+(take-until pred iter)
+----------------------
+take from iter until predicate 'pred' is true.
+
+(zip iter1 iter2)
+-----------------
+zips two iterators, returns a list of cons with next value from each iterator, until one of them gets exhausted. Future plans are to perform this operation over multiple iterators at the same time.
+
+Use cases
+=========
+Sequence Iterators
+------------------
 ```
-CL-USER> (defvar foo (cl-iterators:make-iterator 
-                    :start 0 
-                    :inc 2 
-                    :id #'(lambda(x) (* x x))))
-                    
-
-CL-USER> (cl-iterators:take 5 foo)
-(0 4 16 36 64)                                                                                                                
-CL-USER> (cl-iterators:take 5 foo)
-(100 144 196 256 324)                                                                                                   
+CL-USER> (defparameter foo (cl-iterators:make-iterator :values "hello"                                   
+                                                       :id #'(lambda(x) (cons x (char-code x)))))
+FOO                                                                                                      
+CL-USER> (cl-iterators:take 3 foo)
+((#\h . 104) (#\e . 101) (#\l . 108))   
 ```
 
-Finite iterator:
+Cyclic iterators
+----------------
 ```
-CL-USER> (defvar bar (cl-iterators:make-iterator 
-                    :start 1 
-                    :inc 2 
-                    :end 10
-                    :id #'(lambda(x) (* x x))))
+CL-USER> (setq tmp (cl-iterators:make-iterator 
+                    :values '(1 2 3)
+                    :cyclic T))
 
-CL-USER> (cl-iterators:take 20 bar)
-(1 9 25 49 81)                                                                                                          
+CL-USER> (cl-iterators:take 20 tmp)
+(1 2 3 1 2 3 1 2 3 1 2 3 1 2 3 1 2 3 1 2)
 ```
 
-Iterate a list:
+Reverse iteration
+-----------------
+```
+CL-USER> CL-USER> (defparameter bar (cl-iterators:make-iterator :values #(1 2 3 4) :reverse T))
+BAR
+ 
+CL-USER> (cl-iterators:take 5 bar)
+(4 3 2 1)
+```
+
+Iterate a list
+--------------
 ```
 CL-USER> (defvar baz (cl-iterators:make-iterator 
                      :values '(1 2 3 4 5)))
@@ -41,18 +65,23 @@ CL-USER> (cl-iterators:take 2 baz)
 (3 4)
 ```
 
-Cyclic iterators:
+Sequence generators
+-------------------
 ```
-CL-USER> (setq tmp (cl-iterators:make-iterator 
-                    :values '(1 2 3)
-                    :cyclic T))
+CL-USER> (defparameter *even-generator*                                                                    
+           (cl-iterators:make-iterator :start 1 :id #'(lambda(x) (* 2 x))))
+EVEN-GENERATOR                                                          
 
-CL-USER> (cl-iterators:take 20 tmp)
-(1 2 3 1 2 3 1 2 3 1 2 3 1 2 3 1 2 3 1 2)
+CL-USER> (cl-iterators:take 10 *even-generator*)
+(2 4 6 8 10 12 14 16 18 20)   
+
+CL-USER> (defvar *square-generator* (cl-iterators:make-iterator
+                                    :start 0
+                                    :inc 2
+                                    :id #'(lambda(x) (* x x))))
+                    
+CL-USER> (cl-iterators:take 5 *square-generator*)
+(0 4 16 36 64)                                                                                                                
+CL-USER> (cl-iterators:take 5 *square-generator*)
+(100 144 196 256 324)                                                                                                   
 ```
-
-Other functions:
-1. take-while/take-until
-2. zip: zips two iterators
-
-Macros: make-iterator, with-iterator
