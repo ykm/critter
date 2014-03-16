@@ -55,7 +55,8 @@
     (if (or (funcall bound-check index end) (eq end -1))
         (let ((current
                (funcall id (cond
-                             ((not (null initial-contents)) (funcall accessor index initial-contents))
+                             ((not (null initial-contents))
+                              (funcall accessor index initial-contents))
                              ((not (null initial-element)) initial-element)
                              (T index)))))
           (incf index increment)
@@ -91,28 +92,29 @@
 
 (defmacro make-iterator (&key (start 0) (end -1) (inc 1) (id #'identity) (cyclic nil)
                            (initial-contents ()) (from-end nil) (initial-element nil))
-  `(let ((tmp (make-instance 'iterator :start (or ,start 0)
-                             :end (or (when (not (null ,initial-contents))
-                                        (let ((tmp (length ,initial-contents)))
-                                             (if (= ,end -1)
-                                                 tmp
-                                                 (when (>= ,end tmp)
-                                                   (error "length out of bounds")))))
-                                      ,end)
-                             :inc ,inc :id ,id :cyclic ,cyclic
-                             :initial-contents ,initial-contents
-                             :initial-element ,initial-element)))
-     (with-slots (start end index initial-contents increment accessor bound-check) tmp
-       (when (not (listp initial-contents))
-         (setf accessor #'(lambda(n seq) (elt seq n))))
-       (if ,from-end
-           (progn
-             (rotatef start end)
-             (setf index start
-                   bound-check #'>
-                   increment (* -1 ,inc)))
-           (setf index start)))
-     tmp))
+  (let ((iter (gensym "iterator")))
+    `(let ((,iter (make-instance 'iterator :start (or ,start 0)
+                                 :end (or (when (not (null ,initial-contents))
+                                            (let ((len (length ,initial-contents)))
+                                              (if (= ,end -1)
+                                                  len
+                                                  (when (>= ,end len)
+                                                    (error "length out of bounds")))))
+                                          ,end)
+                                 :inc ,inc :id ,id :cyclic ,cyclic
+                                 :initial-contents ,initial-contents
+                                 :initial-element ,initial-element)))
+       (with-slots (start end index initial-contents increment accessor bound-check) ,iter
+         (when (not (listp initial-contents))
+           (setf accessor #'(lambda(n seq) (elt seq n))))
+         (if ,from-end
+             (progn
+               (rotatef start end)
+               (setf index start
+                     bound-check #'>
+                     increment (* -1 ,inc)))
+             (setf index start)))
+       ,iter)))
 
 (defmacro with-iterator ((name &key (start 0) (end -1) (increment 1)
                                (initial-contents nil) (id #'identity)) &body body)
