@@ -66,23 +66,23 @@
             (when (not quiet)
               (error "Stop iteration, iterations have exhausted."))))))
 
-(defmethod take(n (iter iterator))
+(defmethod take (n (iter iterator))
   (loop for i from 1 to n
      for j = (next iter) 
      while j
      collect j))
 
-(defmethod take-while(pred (iter iterator))
+(defmethod take-while (pred (iter iterator))
   (loop for i = (next iter)
      while (and i (funcall pred i))
      collect i))
 
-(defmethod take-until(pred (iter iterator))
+(defmethod take-until (pred (iter iterator))
   (loop for i = (next iter)
      until (or (not i) (funcall pred i))
      collect i))
 
-(defmethod zip((a iterator) (b iterator))
+(defmethod zip ((a iterator) (b iterator))
   (loop for i = (next a)
      for j = (next b) 
      while (and i j)
@@ -109,7 +109,7 @@
            (setf index start)))
      tmp))
          
-(defmacro with-iterator((name &key (start 0) (length -1) (increment 1)
+(defmacro with-iterator ((name &key (start 0) (length -1) (increment 1)
                               (initial-contents nil) (id #'identity)) &body body)
   `(let ((,name (make-iterator :start ,start
                                :length ,length :inc ,increment
@@ -154,6 +154,6 @@
     `(do-sequence-iterators* ,all-clauses
        ,@body)))
 
-(defmacro dosequence ((var sequence :key result start end from-end) &body body)
+(defmacro dosequence ((var sequence &key result start end from-end) &body body)
   `(dosequences* ((,var ,sequence :result ,result :start ,start :end ,end :from-end ,from-end))
      ,@body))
