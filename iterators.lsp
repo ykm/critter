@@ -13,7 +13,8 @@
            :do-sequence-iterators
            :do-sequence-iterators*
            :dosequences*
-           :dosequence))
+           :dosequence
+           :list-to-alist))
 
 (in-package :cl-iterators)
 
@@ -26,7 +27,7 @@
    (index :initform 0
           :documentation "the current index of the iteration") 
    (length :initform -1 :initarg :length
-        :documentation "The length of the iteration, -1 denotes an infinite iteration, for lists/sequences, the sequence length limits the iteration")
+           :documentation "The length of the iteration, -1 denotes an infinite iteration, for lists/sequences, the sequence length limits the iteration")
    (increment :initform 1 :initarg :inc
               :documentation "the increment of the iteration")
    (id :initform #'identity :initarg :id
@@ -40,7 +41,7 @@
    (initial-element :initform nil :initarg :initial-element
                     :documentation "When supplied and no initial-contents supplied, iteration returns the value instead of the index")
    (bound-check :initform #'<= :initarg :from-end
-                :documentation "When T, direction of iteration is from-endd")
+                :documentation "When T, direction of iteration is from-end")
    (comparer :initform #'nth
              :documentation "Function to access to individual members of a initial-contents, #'nth for lists, #'elt for others")))
 
@@ -90,7 +91,13 @@
 
 (defmacro make-iterator (&key (start 0) (length -1) (inc 1) (id #'identity) (cyclic nil)
                            (initial-contents ()) (from-end nil) (initial-element nil))
-  `(let ((tmp (make-instance 'iterator :start ,start
+  `(let ((tmp (make-instance 'iterator :start (or ,start 0)
+                             ;; TODO: length, which also acts as the
+                             ;; end of the iteration, should not necessarily
+                             ;; be the end of the sequence as one also
+                             ;; might have to iterate over
+                             ;; subsequences, in that case a bound
+                             ;; check will also be required?
                              :length (if (null ,initial-contents)
                                          ,length
                                          (1- (length ,initial-contents)))
@@ -101,19 +108,19 @@
        (when (not (listp initial-contents))
          (setf comparer #'(lambda(n seq) (elt seq n))))
        (if ,from-end
-           (setf start length
-                 index length
-                 length ,start
-                 bound-check #'>=
-                 increment (* -1 ,inc))
+           (progn
+             (rotatef start length)
+             (setf index start
+                   bound-check #'>=
+                   increment (* -1 ,inc)))
            (setf index start)))
      tmp))
-         
+
 (defmacro with-iterator ((name &key (start 0) (length -1) (increment 1)
-                              (initial-contents nil) (id #'identity)) &body body)
-  `(let ((,name (make-iterator :start ,start
-                               :length ,length :inc ,increment
-                               :initial-contents ,initial-contents :id ,id)))
+                               (initial-contents nil) (id #'identity)) &body body)
+  `(let ((,name (make-iterator :start ,start :length ,length
+                               :inc ,increment :id ,id
+                               :initial-contents ,initial-contents)))
      ,@body))
 
 (defmethod to-string ((iter iterator))
@@ -131,6 +138,24 @@
       collect `(,var-name (next ,iter-tmp) (or (next ,iter-tmp) ,result-tmp)))
    `((some #'null (list ,@(loop for clause in all-clauses collect (car clause)))))))
 
+(defun list-to-alist (lst)
+  (labels ((rec (lst alst)
+             (cond 
+               ((null lst) alst)
+               ((null (cdr lst)) (error "odd number of args"))
+               (T (rec (cddr lst) (cons (cons (first lst) (second lst)) alst))))))
+    (nreverse (rec lst '()))))
+
+(defun resolve-key-args(clause key-args &optional (key-name-p T))
+  (let* ((pairs (list-to-alist clause))
+         (args (car pairs))
+         (others (cdr pairs))
+         (get #'(lambda(key) (cdr (assoc key others)))))
+    (append (list (car args) (cdr args)) 
+            (loop for key in key-args
+               for value = (funcall get key) 
+               appending (if key-name-p (list key value) (list value))))))
+
 (defmacro do-sequence-iterators (((var iter &optional result) &rest more-clauses) &body body)
   (let ((all-clauses (cons (list var iter result) more-clauses)))
     `(do ,@(get-sequence-iter-varlist all-clauses)
@@ -147,13 +172,16 @@
 
 (defmacro dosequences* (((var sequence &key result start end from-end)
                          &rest more-clauses) &body body)
-  (let* ((tmp-clauses (cons (list var sequence start end from-end result) more-clauses))
+  (let* ((all-args (cons (list var sequence :start start :length end
+                               :from-end from-end :result result) more-clauses))
+         (key-args '(:start :length :from-end :result))
+         (tmp-clauses (mapcar #'(lambda(x) (resolve-key-args x key-args nil)) all-args))
          (all-clauses (loop for (var sequence start end from-end result) in tmp-clauses
-                         collect `(,var (make-iterator :start (or 0 ,start) :initial-contents ,sequence
+                         collect `(,var (make-iterator :start ,start :initial-contents ,sequence
                                                        :length ,end :from-end ,from-end) ,result))))
     `(do-sequence-iterators* ,all-clauses
        ,@body)))
 
 (defmacro dosequence ((var sequence &key result start end from-end) &body body)
-  `(dosequences* ((,var ,sequence :result ,result :start ,start :end ,end :from-end ,from-end))
+  `(dosequences* ((,var ,sequence :result ,result :start ,start :length ,end :from-end ,from-end))
      ,@body))
