@@ -26,8 +26,8 @@
           :documentation "The start of the iteration, either an index value or integer value to mark the start of iteration")
    (index :initform 0
           :documentation "the current index of the iteration") 
-   (length :initform -1 :initarg :length
-           :documentation "The length of the iteration, -1 denotes an infinite iteration, for lists/sequences, the sequence length limits the iteration")
+   (end :initform -1 :initarg :end
+        :documentation "The end of the iteration, -1 denotes an infinite iteration, for lists/sequences, the sequence length limits the iteration")
    (increment :initform 1 :initarg :inc
               :documentation "the increment of the iteration")
    (id :initform #'identity :initarg :id
@@ -40,9 +40,9 @@
                      :documentation "A list/sequence of initial-contents to be iterated")
    (initial-element :initform nil :initarg :initial-element
                     :documentation "When supplied and no initial-contents supplied, iteration returns the value instead of the index")
-   (bound-check :initform #'<= :initarg :from-end
+   (bound-check :initform #'< :initarg :from-end
                 :documentation "When T, direction of iteration is from-end")
-   (comparer :initform #'nth
+   (accessor :initform #'nth
              :documentation "Function to access to individual members of a initial-contents, #'nth for lists, #'elt for others")))
 
 (defmethod reset ((iter iterator))
@@ -50,12 +50,12 @@
     (setf index start)))
 
 (defmethod next ((iter iterator))
-  (with-slots (index length increment id quiet cyclic initial-element
-                     comparer bound-check initial-contents) iter
-    (if (or (funcall bound-check index length) (eq length -1))
+  (with-slots (index end increment id quiet cyclic initial-element
+                     accessor bound-check initial-contents) iter
+    (if (or (funcall bound-check index end) (eq end -1))
         (let ((current
                (funcall id (cond
-                             ((not (null initial-contents)) (funcall comparer index initial-contents))
+                             ((not (null initial-contents)) (funcall accessor index initial-contents))
                              ((not (null initial-element)) initial-element)
                              (T index)))))
           (incf index increment)
@@ -89,50 +89,48 @@
      while (and i j)
      collect (cons i j)))
 
-(defmacro make-iterator (&key (start 0) (length -1) (inc 1) (id #'identity) (cyclic nil)
+(defmacro make-iterator (&key (start 0) (end -1) (inc 1) (id #'identity) (cyclic nil)
                            (initial-contents ()) (from-end nil) (initial-element nil))
   `(let ((tmp (make-instance 'iterator :start (or ,start 0)
-                             ;; TODO: length, which also acts as the
-                             ;; end of the iteration, should not necessarily
-                             ;; be the end of the sequence as one also
-                             ;; might have to iterate over
-                             ;; subsequences, in that case a bound
-                             ;; check will also be required?
-                             :length (if (null ,initial-contents)
-                                         ,length
-                                         (1- (length ,initial-contents)))
+                             :end (or (when (not (null ,initial-contents))
+                                        (let ((tmp (length ,initial-contents)))
+                                             (if (= ,end -1)
+                                                 tmp
+                                                 (when (>= ,end tmp)
+                                                   (error "length out of bounds")))))
+                                      ,end)
                              :inc ,inc :id ,id :cyclic ,cyclic
                              :initial-contents ,initial-contents
                              :initial-element ,initial-element)))
-     (with-slots (start length index initial-contents increment comparer bound-check) tmp
+     (with-slots (start end index initial-contents increment accessor bound-check) tmp
        (when (not (listp initial-contents))
-         (setf comparer #'(lambda(n seq) (elt seq n))))
+         (setf accessor #'(lambda(n seq) (elt seq n))))
        (if ,from-end
            (progn
-             (rotatef start length)
+             (rotatef start end)
              (setf index start
-                   bound-check #'>=
+                   bound-check #'>
                    increment (* -1 ,inc)))
            (setf index start)))
      tmp))
 
-(defmacro with-iterator ((name &key (start 0) (length -1) (increment 1)
+(defmacro with-iterator ((name &key (start 0) (end -1) (increment 1)
                                (initial-contents nil) (id #'identity)) &body body)
-  `(let ((,name (make-iterator :start ,start :length ,length
+  `(let ((,name (make-iterator :start ,start :end ,end
                                :inc ,increment :id ,id
                                :initial-contents ,initial-contents)))
      ,@body))
 
 (defmethod to-string ((iter iterator))
-  (with-slots (start length increment id quiet initial-contents cyclic) iter
-    (format T "start: ~A, length: ~A, quiet: ~A, inc: ~A, cyclic: ~A, initial-contents: ~A ~%"
-            start length quiet increment cyclic initial-contents)))
+  (with-slots (start end increment id quiet initial-contents cyclic) iter
+    (format T "start: ~A, end: ~A, quiet: ~A, inc: ~A, cyclic: ~A, initial-contents: ~A ~%"
+            start end quiet increment cyclic initial-contents)))
 
 (defun get-sequence-iter-varlist (all-clauses)
   (list
    (loop for clause in all-clauses
-      for var-name = (nth 0 clause)
-      for tmp = (nth 1 clause)
+      for var-name = (first clause)
+      for tmp = (second clause)
       for iter-tmp = (if (listp tmp) (eval tmp) tmp)
       for result-tmp = (nth 2 clause)
       collect `(,var-name (next ,iter-tmp) (or (next ,iter-tmp) ,result-tmp)))
@@ -172,16 +170,16 @@
 
 (defmacro dosequences* (((var sequence &key result start end from-end)
                          &rest more-clauses) &body body)
-  (let* ((all-args (cons (list var sequence :start start :length end
+  (let* ((all-args (cons (list var sequence :start start :end end
                                :from-end from-end :result result) more-clauses))
-         (key-args '(:start :length :from-end :result))
+         (key-args '(:start :end :from-end :result))
          (tmp-clauses (mapcar #'(lambda(x) (resolve-key-args x key-args nil)) all-args))
          (all-clauses (loop for (var sequence start end from-end result) in tmp-clauses
                          collect `(,var (make-iterator :start ,start :initial-contents ,sequence
-                                                       :length ,end :from-end ,from-end) ,result))))
+                                                       :end ,end :from-end ,from-end) ,result))))
     `(do-sequence-iterators* ,all-clauses
        ,@body)))
 
 (defmacro dosequence ((var sequence &key result start end from-end) &body body)
-  `(dosequences* ((,var ,sequence :result ,result :start ,start :length ,end :from-end ,from-end))
+  `(dosequences* ((,var ,sequence :result ,result :start ,start :end ,end :from-end ,from-end))
      ,@body))
