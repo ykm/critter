@@ -118,7 +118,6 @@
                      bound-check #'>=
                      increment (* -1 ,inc)))
              (setf index start)))
-       (to-string ,iter)
        ,iter)))
 
 (defmacro with-iterator ((name &key (start 0) (end *limit*) (increment 1)
