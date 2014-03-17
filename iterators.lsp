@@ -18,6 +18,9 @@
 
 (in-package :cl-iterators)
 
+(defvar *limit* most-positive-fixnum
+  "Serves as the end of the iterator in case where it isn't specified.")
+
 (defclass stop-iteration-exception()
   ((init :initform (error "Stop iteration, iteration has exhausted."))))
 
@@ -26,8 +29,8 @@
           :documentation "The start of the iteration, either an index value or integer value to mark the start of iteration")
    (index :initform 0
           :documentation "the current index of the iteration") 
-   (end :initform -1 :initarg :end
-        :documentation "The end of the iteration, -1 denotes an infinite iteration, for lists/sequences, the sequence length limits the iteration")
+   (end :initform *limit* :initarg :end
+        :documentation "The end of the iteration, *limit* denotes an infinite iteration, for lists/sequences, the sequence length limits the iteration")
    (increment :initform 1 :initarg :inc
               :documentation "the increment of the iteration")
    (id :initform #'identity :initarg :id
@@ -40,7 +43,7 @@
                      :documentation "A list/sequence of initial-contents to be iterated")
    (initial-element :initform nil :initarg :initial-element
                     :documentation "When supplied and no initial-contents supplied, iteration returns the value instead of the index")
-   (bound-check :initform #'< :initarg :from-end
+   (bound-check :initform #'<= :initarg :from-end
                 :documentation "When T, direction of iteration is from-end")
    (accessor :initform #'nth
              :documentation "Function to access to individual members of a initial-contents, #'nth for lists, #'elt for others")))
@@ -52,7 +55,7 @@
 (defmethod next ((iter iterator))
   (with-slots (index end increment id quiet cyclic initial-element
                      accessor bound-check initial-contents) iter
-    (if (or (funcall bound-check index end) (eq end -1))
+    (if (or (funcall bound-check index end) (eq end *limit*))
         (let ((current
                (funcall id (cond
                              ((not (null initial-contents))
@@ -90,17 +93,18 @@
      while (and i j)
      collect (cons i j)))
 
-(defmacro make-iterator (&key (start 0) (end -1) (inc 1) (id #'identity) (cyclic nil)
+(defmacro make-iterator (&key (start 0) (end *limit*) (inc 1) (id #'identity) (cyclic nil)
                            (initial-contents ()) (from-end nil) (initial-element nil))
   (let ((iter (gensym "iterator")))
     `(let ((,iter (make-instance 'iterator :start (or ,start 0)
-                                 :end (or (when (not (null ,initial-contents))
-                                            (let ((len (length ,initial-contents)))
-                                              (if (= ,end -1)
+                                 :end (let ((len (1- (length ,initial-contents)))
+                                            (end (or ,end *limit*)))
+                                        (or (when (not (null ,initial-contents))
+                                              (if (= end *limit*)
                                                   len
-                                                  (when (>= ,end len)
-                                                    (error "length out of bounds")))))
-                                          ,end)
+                                                  (when (> end len)
+                                                    (error "length out of bounds"))))
+                                            end))
                                  :inc ,inc :id ,id :cyclic ,cyclic
                                  :initial-contents ,initial-contents
                                  :initial-element ,initial-element)))
@@ -111,12 +115,13 @@
              (progn
                (rotatef start end)
                (setf index start
-                     bound-check #'>
+                     bound-check #'>=
                      increment (* -1 ,inc)))
              (setf index start)))
+       (to-string ,iter)
        ,iter)))
 
-(defmacro with-iterator ((name &key (start 0) (end -1) (increment 1)
+(defmacro with-iterator ((name &key (start 0) (end *limit*) (increment 1)
                                (initial-contents nil) (id #'identity)) &body body)
   `(let ((,name (make-iterator :start ,start :end ,end
                                :inc ,increment :id ,id
