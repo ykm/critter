@@ -4,7 +4,6 @@
            :next
            :take
            :take-while
-           :take-until
            :zip
            :reset
            :cyclic-p

@@ -3,6 +3,10 @@ cl-iterators
 
 cl-iterators allows us to create an iterator over lists or sequences. Following functions have been included in the initial API
 
+(next iter)
+-----------
+Gets the next element from the iterator. If the iterator is neither infinite nor cyclic and the iteration exhausts, the method throws up a stop-iteration-exception.
+
 (take n iter)
 -------------
 Take n elements from the iterator. The return value is a list of the values accumulated. However, in future, we might need have to retain type of the values supplied during the iterator creation.
@@ -10,10 +14,6 @@ Take n elements from the iterator. The return value is a list of the values accu
 (take-while pred iter)
 ----------------------
 take from iter while predicate 'pred' is true.
-
-(take-until pred iter)
-----------------------
-take from iter until predicate 'pred' is true.
 
 (zip iter1 iter2)
 -----------------
