@@ -155,10 +155,13 @@
                            :inc ,inc :id ,id :cyclic ,cyclic
                            :initial-contents ,initial-contents
                            :initial-element ,initial-element)))
-       (with-slots (start end index contents
-                          increment accessor check) ,iter
-         (when (listp contents)
-           (setf accessor #'(lambda(seq n) (nth n seq))))
+       (when (listp (initial-contents ,iter))
+         (setf (accessor ,iter) #'(lambda(seq n) (nth n seq))))
+       (with-accessors ((start start)
+                        (end end)
+                        (index index)
+                        (increment increment)
+                        (check bound-check)) ,iter
          (if ,from-end
              (progn
                (rotatef start end)
