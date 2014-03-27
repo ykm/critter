@@ -82,6 +82,11 @@
                    (end end)) iter
     (or (eq end *limit*) (funcall check index end))))
 
+(defmethod to-string ((iter iterator))
+  (with-slots (start end increment id quiet contents cyclic) iter
+    (format nil "start: ~A, end: ~A, quiet: ~A, inc: ~A, cyclic: ~A, initial-contents: ~A ~%"
+            start end quiet increment cyclic contents)))
+
 (defmethod next ((iter iterator))
   (with-accessors ((index index)
                    (element initial-element)
@@ -89,14 +94,12 @@
     (cond
       ((valid-p iter)
        (let ((current
-              (funcall (id iter)
-                       (cond
-                         ((not (null contents))
-                          (funcall (accessor iter) contents index))
-                         ((not (null element)) element)
-                         (T index)))))
+              (cond
+                (contents (funcall (accessor iter) contents index))
+                (element element)
+                (T index))))
          (incf index (increment iter))
-         current))
+         (funcall (id iter) current)))
       ((cyclic-p iter) (progn
                          (reset iter)
                          (next iter)))
@@ -105,38 +108,30 @@
               :text (to-string iter))))))
 
 (defmethod take (n (iter iterator))
-  (let ((has-ended nil))
-    (loop for i from 1 to n
-       for value = (handler-case
-                       (next iter)
-                     (stop-iteration-exception ()
-                       (setf has-ended T)))
-       while (not has-ended)
-       collect value)))
+  (let ((values ()))
+    (handler-case
+        (dotimes (i n)
+          (push (next iter) values))
+      (stop-iteration-exception ()))
+    (nreverse values)))
 
 (defmethod take-while (pred (iter iterator))
-  (let ((has-ended nil))
-    (loop for value = (handler-case
-                          (next iter)
-                        (stop-iteration-exception ()
-                          (setf has-ended T)))
-       while (and (not has-ended)
-                  (funcall pred value))
-       collect value)))
+  (let ((values ()))
+    (handler-case
+        (loop for value = (next iter)
+           while (funcall pred value)
+           do (push value values))
+      (stop-iteration-exception ()))
+    (nreverse values)))
 
 (defmethod zip ((a iterator) (b iterator))
-  (let ((has-ended nil))
-    (loop
-       for value-a = (handler-case
-                         (next a)
-                       (stop-iteration-exception ()
-                         (setf has-ended T)))
-       for value-b = (handler-case
-                         (next b)
-                       (stop-iteration-exception ()
-                         (setf has-ended T)))
-       while (not has-ended)
-       collect (cons value-a value-b))))
+  (let ((vals ()))
+    (handler-case 
+        (loop for value-a = (next a)
+           for value-b = (next b)
+           do (push (cons value-a value-b) vals))
+      (stop-iteration-exception ()))
+    (nreverse vals)))
 
 (defmacro make-iterator (&key (start 0) (end *limit*) (inc 1)
                            (id #'identity) (cyclic nil) (from-end nil)
@@ -144,14 +139,12 @@
   (let ((iter (gensym "iterator")))
     `(let ((,iter
             (make-instance 'iterator :start (or ,start 0)
-                           :end (let ((len (1- (length ,initial-contents)))
-                                      (end (or ,end *limit*)))
-                                  (or (when (not (null ,initial-contents))
-                                        (if (= end *limit*)
-                                            len
-                                            (when (> end len)
-                                              (error "length out of bounds"))))
-                                      end))
+                           :end (or (when ,initial-contents
+                                      (let ((len (1- (length ,initial-contents))))
+                                        (cond
+                                          ((= ,end *limit*) len)
+                                          ((> ,end len) (error "length out of bounds")))))
+                                    ,end *limit*)
                            :inc ,inc :id ,id :cyclic ,cyclic
                            :initial-contents ,initial-contents
                            :initial-element ,initial-element)))
@@ -178,11 +171,6 @@
                                :initial-contents ,initial-contents)))
      ,@body))
 
-(defmethod to-string ((iter iterator))
-  (with-slots (start end increment id quiet contents cyclic) iter
-    (format nil "start: ~A, end: ~A, quiet: ~A, inc: ~A, cyclic: ~A, initial-contents: ~A ~%"
-            start end quiet increment cyclic contents)))
-
 (defun get-sequence-iter-varlist (all-clauses)
   (list
    (loop for clause in all-clauses
@@ -191,7 +179,7 @@
       for iter-tmp = (if (listp tmp) (eval tmp) tmp)
       for result-tmp = (nth 2 clause)
       collect `(,var-name (next ,iter-tmp) (or (next ,iter-tmp) ,result-tmp)))
-   `((some #'null (list ,@(loop for clause in all-clauses collect (car clause)))))))
+   `((some #'null (list ,@(mapcar #'first all-clauses))))))
 
 (defun list-to-alist (lst)
   (labels ((rec (lst alst)
