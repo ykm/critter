@@ -7,6 +7,7 @@
            :zip
            :reset
            :cyclic-p
+           :exhausted-p
            :make-iterator
            :with-iterator
            :do-sequence-iterator
@@ -70,10 +71,34 @@
              :documentation "When T, direction of iteration is reversed.")
    (accessor :initform #'elt
              :accessor accessor
-             :documentation "Function to access to individual members of a initial-contents, #'nth for lists, #'elt for others")))
+             :documentation "Function to access to individual members of a initial-contents, #'nth for lists, #'elt for others")
+   (exhausted :initform nil
+              :accessor exhausted-p
+              :documentation "A flag which is set when the iterator exhausts.")))
+
+(defmethod initialize-instance :after ((iter iterator) &key)
+  (with-accessors ((start start) (index index) (end end)
+                   (from-end from-end-p) (inc increment)
+                   (accessor accessor) (check bound-check)
+                   (contents initial-contents)) iter
+    (when contents
+      (let ((len (1- (length contents))))
+        (cond
+          ((= end *limit*) (setf end len))
+          ((> end len) (error "length out of bounds"))))
+      (when (listp contents)
+        (setf accessor #'(lambda(seq n) (nth n seq)))))
+    (when from-end
+      (rotatef start end)
+      (setf index start
+            check #'>=
+            inc (* -1 inc)))
+    (setf index start)))
 
 (defmethod reset ((iter iterator))
-  (with-accessors ((start start) (index index)) iter
+  (with-accessors ((start start) (index index)
+                   (exhausted exhausted-p)) iter
+    (setf exhausted nil)
     (setf index start)))
 
 (defmethod valid-p ((iter iterator))
@@ -103,9 +128,11 @@
       ((cyclic-p iter) (progn
                          (reset iter)
                          (next iter)))
-      ((not (quiet-p iter))
-       (error 'stop-iteration-exception
-              :text (to-string iter))))))
+      (T (progn
+           (setf (exhausted-p iter) T)
+           (when (not (quiet-p iter))
+             (error 'stop-iteration-exception
+                    :text (to-string iter))))))))
 
 (defmethod take (n (iter iterator))
   (let ((values ()))
@@ -136,33 +163,11 @@
 (defmacro make-iterator (&key (start 0) (end *limit*) (inc 1)
                            (id #'identity) (cyclic nil) (from-end nil)
                            (initial-contents ()) (initial-element nil))
-  (let ((iter (gensym "iterator")))
-    `(let ((,iter
-            (make-instance 'iterator :start (or ,start 0)
-                           :end (or (when ,initial-contents
-                                      (let ((len (1- (length ,initial-contents))))
-                                        (cond
-                                          ((= ,end *limit*) len)
-                                          ((> ,end len) (error "length out of bounds")))))
-                                    ,end *limit*)
-                           :inc ,inc :id ,id :cyclic ,cyclic
-                           :initial-contents ,initial-contents
-                           :initial-element ,initial-element)))
-       (when (listp (initial-contents ,iter))
-         (setf (accessor ,iter) #'(lambda(seq n) (nth n seq))))
-       (with-accessors ((start start)
-                        (end end)
-                        (index index)
-                        (increment increment)
-                        (check bound-check)) ,iter
-         (if ,from-end
-             (progn
-               (rotatef start end)
-               (setf index start
-                     check #'>=
-                     increment (* -1 ,inc)))
-             (setf index start)))
-       ,iter)))
+  `(make-instance 'iterator :start (or ,start 0)
+                  :end (or ,end *limit*) :inc ,inc :id ,id
+                  :cyclic ,cyclic :from-end ,from-end
+                  :initial-contents ,initial-contents
+                  :initial-element ,initial-element))
 
 (defmacro with-iterator ((name &key (start 0) (end *limit*) (increment 1)
                                (initial-contents nil) (id #'identity)) &body body)
@@ -171,15 +176,15 @@
                                :initial-contents ,initial-contents)))
      ,@body))
 
-(defun get-sequence-iter-varlist (all-clauses)
-  (list
-   (loop for clause in all-clauses
-      for var-name = (first clause)
-      for tmp = (second clause)
-      for iter-tmp = (if (listp tmp) (eval tmp) tmp)
-      for result-tmp = (nth 2 clause)
-      collect `(,var-name (next ,iter-tmp) (or (next ,iter-tmp) ,result-tmp)))
-   `((some #'null (list ,@(mapcar #'first all-clauses))))))
+(defun get-varlist (all-clauses)
+  (let ((varlist ())
+        (endlist ()))
+    (loop for (var tmp result) in all-clauses
+       for iter = (if (listp tmp) (eval tmp) tmp)
+       do (progn
+            (push `(,var (next ,iter) (or (next ,iter) ,result)) varlist)
+            (push `(exhausted-p ,iter) endlist)))
+    (list varlist endlist)))
 
 (defun list-to-alist (lst)
   (labels ((rec (lst alst)
@@ -189,28 +194,29 @@
                (T (rec (cddr lst) (cons (cons (first lst) (second lst)) alst))))))
     (nreverse (rec lst '()))))
 
-(defun resolve-key-args(clause key-args &optional (key-name-p T))
-  (let* ((pairs (list-to-alist clause))
-         (args (car pairs))
-         (others (cdr pairs))
-         (get #'(lambda(key) (cdr (assoc key others)))))
-    (append (list (car args) (cdr args)) 
-            (loop for key in key-args
-               for value = (funcall get key) 
-               appending (if key-name-p (list key value) (list value))))))
+(defun resolve-key-args (clause keys)
+  (destructuring-bind ((var . sequence) &rest others) (list-to-alist clause)
+    (append (list var sequence) 
+            (loop for key in keys
+               for value = (cdr (assoc key others))
+               appending (list key value)))))
 
 (defmacro do-sequence-iterators (((var iter &optional result) &rest more-clauses) &body body)
   (let ((all-clauses (cons (list var iter result) more-clauses)))
-    `(do ,@(get-sequence-iter-varlist all-clauses)
-         ,@body)))
+    `(handler-case
+         (do ,@(get-varlist all-clauses)
+             ,@body)
+       (stop-iteration-exception()))))
 
 (defmacro do-sequence-iterators* (((var iter &optional result) &rest more-clauses) &body body)
   (let ((all-clauses (cons (list var iter result) more-clauses)))
-    `(do* ,@(get-sequence-iter-varlist all-clauses)
-          ,@body)))
+    `(handler-case
+         (do* ,@(get-varlist all-clauses)
+              ,@body)
+       (stop-iteration-exception()))))
 
 (defmacro do-sequence-iterator ((var iter &optional result) &body body)
-  `(do-sequence-iterators* (,var ,iter ,result)
+  `(do-sequence-iterators* ((,var ,iter ,result))
      ,@body))
 
 (defmacro dosequences* (((var sequence &key result start end from-end)
@@ -218,7 +224,7 @@
   (let* ((all-args (cons (list var sequence :start start :end end
                                :from-end from-end :result result) more-clauses))
          (key-args '(:start :end :from-end :result))
-         (tmp-clauses (mapcar #'(lambda(x) (resolve-key-args x key-args nil)) all-args))
+         (tmp-clauses (mapcar #'(lambda(x) (resolve-key-args x key-args)) all-args))
          (all-clauses (loop for (var sequence start end from-end result) in tmp-clauses
                          collect `(,var (make-iterator :start ,start :initial-contents ,sequence
                                                        :end ,end :from-end ,from-end) ,result))))
