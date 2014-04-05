@@ -35,7 +35,7 @@ Cyclic iterators
 ----------------
 ```
 CL-USER> (setq tmp (cl-iterators:make-iterator 
-                    :values '(1 2 3)
+                    :initial-contents '(1 2 3)
                     :cyclic T))
 
 CL-USER> (cl-iterators:take 20 tmp)
