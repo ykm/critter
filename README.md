@@ -24,7 +24,7 @@ Use cases
 Sequence Iterators
 ------------------
 ```
-CL-USER> (defparameter foo (cl-iterators:make-iterator :values "hello"                                   
+CL-USER> (defparameter foo (cl-iterators:make-iterator :initial-contents "hello"                                   
                                                        :id #'(lambda(x) (cons x (char-code x)))))
 FOO                                                                                                      
 CL-USER> (cl-iterators:take 3 foo)
@@ -45,7 +45,7 @@ CL-USER> (cl-iterators:take 20 tmp)
 Reverse iteration
 -----------------
 ```
-CL-USER> CL-USER> (defparameter bar (cl-iterators:make-iterator :values #(1 2 3 4) :reverse T))
+CL-USER> CL-USER> (defparameter bar (cl-iterators:make-iterator :initial-contents #(1 2 3 4) :from-end T))
 BAR
  
 CL-USER> (cl-iterators:take 5 bar)
@@ -56,7 +56,7 @@ Iterate a list
 --------------
 ```
 CL-USER> (defvar baz (cl-iterators:make-iterator 
-                     :values '(1 2 3 4 5)))
+                     :initial-contents '(1 2 3 4 5)))
 
 CL-USER> (cl-iterators:take 2 baz)
 (1 2)
