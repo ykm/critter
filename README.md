@@ -44,7 +44,7 @@ CL-USER> (iter:take 20 bar)
 Reverse iteration
 -----------------
 ```
-CL-USER> CL-USER> (defparameter baz (iter:make-iterator :intial-contents #(1 2 3 4) :reverse T))
+CL-USER> CL-USER> (defparameter baz (iter:make-iterator :intial-contents #(1 2 3 4) :from-end T))
 BAZ
  
 CL-USER> (iter:take 5 bar)
