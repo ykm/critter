@@ -1,5 +1,6 @@
 (defpackage :cl-iterators
   (:use :common-lisp)
+  (:nicknames :iter)
   (:export :iterator
            :next
            :take

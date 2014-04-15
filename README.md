@@ -24,64 +24,64 @@ Use cases
 Sequence Iterators
 ------------------
 ```
-CL-USER> (defparameter foo (cl-iterators:make-iterator :initial-contents "hello"                                   
-                                                       :id #'(lambda(x) (cons x (char-code x)))))
+CL-USER> (defparameter foo (iter:make-iterator :initial-contents "hello" 
+                                               :id #'(lambda(x) (cons x (char-code x)))))
 FOO                                                                                                      
-CL-USER> (cl-iterators:take 3 foo)
+CL-USER> (iter:take 3 foo)
 ((#\h . 104) (#\e . 101) (#\l . 108))   
 ```
 
 Cyclic iterators
 ----------------
 ```
-CL-USER> (setq tmp (cl-iterators:make-iterator 
-                    :initial-contents '(1 2 3)
-                    :cyclic T))
+CL-USER> (defparameter bar (iter:make-iterator :intial-contents '(1 2 3) :cyclic T))
+BAR
 
-CL-USER> (cl-iterators:take 20 tmp)
+CL-USER> (iter:take 20 bar)
 (1 2 3 1 2 3 1 2 3 1 2 3 1 2 3 1 2 3 1 2)
 ```
 
 Reverse iteration
 -----------------
 ```
-CL-USER> CL-USER> (defparameter bar (cl-iterators:make-iterator :initial-contents #(1 2 3 4) :from-end T))
-BAR
+CL-USER> CL-USER> (defparameter baz (iter:make-iterator :intial-contents #(1 2 3 4) :reverse T))
+BAZ
  
-CL-USER> (cl-iterators:take 5 bar)
+CL-USER> (iter:take 5 bar)
 (4 3 2 1)
 ```
 
 Iterate a list
 --------------
 ```
-CL-USER> (defvar baz (cl-iterators:make-iterator 
-                     :initial-contents '(1 2 3 4 5)))
-
-CL-USER> (cl-iterators:take 2 baz)
+CL-USER> (defvar baz (iter:make-iterator :initial-contents '(1 2 3 4 5)))
+BAZ
+         
+CL-USER> (iter:take 2 baz)
 (1 2)
 
-CL-USER> (cl-iterators:take 2 baz)
+CL-USER> (iter:take 2 baz)
 (3 4)
 ```
 
-Sequence generators
+Sequence generators(?)
 -------------------
 ```
 CL-USER> (defparameter *even-generator*                                                                    
-           (cl-iterators:make-iterator :start 1 :id #'(lambda(x) (* 2 x))))
+           (iter:make-iterator :start 1 :id #'(lambda(x) (* 2 x))))
 EVEN-GENERATOR                                                          
 
-CL-USER> (cl-iterators:take 10 *even-generator*)
+CL-USER> (iter:take 10 *even-generator*)
 (2 4 6 8 10 12 14 16 18 20)   
 
-CL-USER> (defvar *square-generator* (cl-iterators:make-iterator
-                                    :start 0
-                                    :inc 2
-                                    :id #'(lambda(x) (* x x))))
+CL-USER> (defvar *square-generator* (iter:make-iterator
+                                             :start 0
+                                             :inc 2
+                                             :id #'(lambda(x) (* x x))))
                     
-CL-USER> (cl-iterators:take 5 *square-generator*)
-(0 4 16 36 64)                                                                                                                
-CL-USER> (cl-iterators:take 5 *square-generator*)
+CL-USER> (iter:take 5 *square-generator*)
+(0 4 16 36 64)                                                          
+                                                      
+CL-USER> (iter:take 5 *square-generator*)
 (100 144 196 256 324)                                                                                                   
 ```
