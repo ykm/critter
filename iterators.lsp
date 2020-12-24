@@ -1,6 +1,6 @@
-(defpackage :cl-iterators
+(defpackage :critter
   (:use :common-lisp)
-  (:nicknames :iter)
+  (:nicknames :ct)
   (:export :iterator
            :next
            :take
@@ -9,6 +9,7 @@
            :reset
            :cyclic-p
            :exhausted-p
+           :valid-p
            :make-iterator
            :with-iterator
            :do-sequence-iterator
@@ -19,7 +20,7 @@
            :list-to-alist
            :to-string))
 
-(in-package :cl-iterators)
+(in-package :critter)
 
 (defvar *limit* most-positive-fixnum
   "Serves as the end of the iterator in case where it isn't specified.")
@@ -48,7 +49,7 @@
        :initarg :id
        :accessor id
        :documentation "Applied over each value before returning to the caller.")
-   (quiet :initform nil
+   (quiet :initform T
           :initarg :quiet
           :accessor quiet-p
           :documentation "Whether to raise an error when iterations are exhausted")
@@ -68,6 +69,7 @@
           :accessor bound-check
           :documentation "Function to check the boundaries of the iterator.")
    (from-end :initarg :from-end
+	     :initform nil
              :accessor from-end-p
              :documentation "When T, direction of iteration is reversed.")
    (accessor :initform #'elt
@@ -120,10 +122,10 @@
     (cond
       ((valid-p iter)
        (let ((current
-              (cond
-                (contents (funcall (accessor iter) contents index))
-                (element element)
-                (T index))))
+               (cond
+                 (contents (funcall (accessor iter) contents index))
+                 (element element)
+                 (T index))))
          (incf index (increment iter))
          (funcall (id iter) current)))
       ((cyclic-p iter) (progn
@@ -147,8 +149,8 @@
   (let ((values ()))
     (handler-case
         (loop for value = (next iter)
-           while (funcall pred value)
-           do (push value values))
+              while (funcall pred value)
+              do (push value values))
       (stop-iteration-exception ()))
     (nreverse values)))
 
@@ -156,8 +158,8 @@
   (let ((vals ()))
     (handler-case 
         (loop for value-a = (next a)
-           for value-b = (next b)
-           do (push (cons value-a value-b) vals))
+              for value-b = (next b)
+              do (push (cons value-a value-b) vals))
       (stop-iteration-exception ()))
     (nreverse vals)))
 
@@ -165,13 +167,13 @@
                            (id #'identity) (cyclic nil) (from-end nil)
                            (initial-contents ()) (initial-element nil))
   `(make-instance 'iterator :start (or ,start 0)
-                  :end (or ,end *limit*) :inc ,inc :id ,id
-                  :cyclic ,cyclic :from-end ,from-end
-                  :initial-contents ,initial-contents
-                  :initial-element ,initial-element))
+			    :end (or ,end *limit*) :inc ,inc :id ,id
+			    :cyclic ,cyclic :from-end ,from-end
+			    :initial-contents ,initial-contents
+			    :initial-element ,initial-element))
 
 (defmacro with-iterator ((name &key (start 0) (end *limit*) (increment 1)
-                               (initial-contents nil) (id #'identity)) &body body)
+				 (initial-contents nil) (id #'identity)) &body body)
   `(let ((,name (make-iterator :start ,start :end ,end
                                :inc ,increment :id ,id
                                :initial-contents ,initial-contents)))
@@ -181,10 +183,10 @@
   (let ((varlist ())
         (endlist ()))
     (loop for (var tmp result) in all-clauses
-       for iter = (if (listp tmp) (eval tmp) tmp)
-       do (progn
-            (push `(,var (next ,iter) (or (next ,iter) ,result)) varlist)
-            (push `(exhausted-p ,iter) endlist)))
+	  for iter = (if (listp tmp) (eval tmp) tmp)
+	  do (progn
+               (push `(,var (next ,iter) (or (next ,iter) ,result)) varlist)
+               (push `(exhausted-p ,iter) endlist)))
     (list varlist endlist)))
 
 (defun list-to-alist (lst)
@@ -199,8 +201,8 @@
   (destructuring-bind ((var . sequence) &rest others) (list-to-alist clause)
     (append (list var sequence) 
             (loop for key in keys
-               for value = (cdr (assoc key others))
-               appending (list key value)))))
+		  for value = (cdr (assoc key others))
+		  appending (list key value)))))
 
 (defmacro do-sequence-iterators (((var iter &optional result) &rest more-clauses) &body body)
   (let ((all-clauses (cons (list var iter result) more-clauses)))
@@ -223,15 +225,15 @@
 (defmacro dosequences* (((var sequence &key result start end from-end)
                          &rest more-clauses) &body body)
   (let* ((all-args (cons (list var sequence :start start :end end
-                               :from-end from-end :result result) more-clauses))
+					    :from-end from-end :result result) more-clauses))
          (key-args '(:start :end :from-end :result))
          (tmp-clauses (mapcar #'(lambda(x) (resolve-key-args x key-args)) all-args))
          (all-clauses (loop for (var sequence start end from-end result) in tmp-clauses
-                         collect `(,var (make-iterator :start ,start :initial-contents ,sequence
-                                                       :end ,end :from-end ,from-end) ,result))))
+                            collect `(,var (make-iterator :start ,start :initial-contents ,sequence
+							  :end ,end :from-end ,from-end) ,result))))
     `(do-sequence-iterators* ,all-clauses
        ,@body)))
 
 (defmacro dosequence ((var sequence &key result start end from-end) &body body)
   `(dosequences* ((,var ,sequence :result ,result :start ,start :end ,end :from-end ,from-end))
-     ,@body))
+		 ,@body))

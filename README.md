@@ -1,7 +1,7 @@
-cl-iterators
+critter
 ============
 
-cl-iterators allows us to create an iterator over lists or sequences. Following functions have been included in the initial API
+critter allows us to create an iterator over lists or sequences. Following functions have been included in the initial API
 
 (next iter)
 -----------
@@ -9,7 +9,7 @@ Gets the next element from the iterator. If the iterator is neither infinite nor
 
 (take n iter)
 -------------
-Take n elements from the iterator. The return value is a list of the values accumulated. However, in future, we might need have to retain type of the values supplied during the iterator creation.
+Take n elements from the iterator. The return value is a list of the values accumulated. However, in future, we might need have to retain type of the initial-contents supplied during the iterator creation.
 
 (take-while pred iter)
 ----------------------
@@ -24,43 +24,43 @@ Use cases
 Sequence Iterators
 ------------------
 ```
-CL-USER> (defparameter foo (iter:make-iterator :initial-contents "hello" 
-                                               :id #'(lambda(x) (cons x (char-code x)))))
+CL-USER> (defparameter foo (ct:make-iterator :initial-contents "hello" 
+                                             :id #'(lambda(x) (cons x (char-code x)))))
 FOO                                                                                                      
-CL-USER> (iter:take 3 foo)
+CL-USER> (ct:take 3 foo)
 ((#\h . 104) (#\e . 101) (#\l . 108))   
 ```
 
 Cyclic iterators
 ----------------
 ```
-CL-USER> (defparameter bar (iter:make-iterator :intial-contents '(1 2 3) :cyclic T))
+CL-USER> (defparameter bar (ct:make-iterator :intial-contents '(1 2 3) :cyclic T))
 BAR
 
-CL-USER> (iter:take 20 bar)
+CL-USER> (ct:take 20 bar)
 (1 2 3 1 2 3 1 2 3 1 2 3 1 2 3 1 2 3 1 2)
 ```
 
 Reverse iteration
 -----------------
 ```
-CL-USER> CL-USER> (defparameter baz (iter:make-iterator :intial-contents #(1 2 3 4) :from-end T))
+CL-USER> CL-USER> (defparameter baz (ct:make-iterator :intial-contents #(1 2 3 4) :from-end T))
 BAZ
  
-CL-USER> (iter:take 5 bar)
+CL-USER> (ct:take 5 bar)
 (4 3 2 1)
 ```
 
 Iterate a list
 --------------
 ```
-CL-USER> (defvar baz (iter:make-iterator :initial-contents '(1 2 3 4 5)))
+CL-USER> (defvar baz (ct:make-iterator :initial-contents '(1 2 3 4 5)))
 BAZ
          
-CL-USER> (iter:take 2 baz)
+CL-USER> (ct:take 2 baz)
 (1 2)
 
-CL-USER> (iter:take 2 baz)
+CL-USER> (ct:take 2 baz)
 (3 4)
 ```
 
@@ -68,20 +68,25 @@ Sequence generators(?)
 -------------------
 ```
 CL-USER> (defparameter *even-generator*                                                                    
-           (iter:make-iterator :start 1 :id #'(lambda(x) (* 2 x))))
+           (ct:make-iterator :start 1 :id #'(lambda(x) (* 2 x))))
 EVEN-GENERATOR                                                          
 
-CL-USER> (iter:take 10 *even-generator*)
+CL-USER> (ct:take 10 *even-generator*)
 (2 4 6 8 10 12 14 16 18 20)   
 
-CL-USER> (defvar *square-generator* (iter:make-iterator
-                                             :start 0
-                                             :inc 2
-                                             :id #'(lambda(x) (* x x))))
+CL-USER> (defvar *square-generator* (ct:make-iterator
+                                           :start 0
+                                           :inc 2
+                                           :id #'(lambda(x) (* x x))))
                     
-CL-USER> (iter:take 5 *square-generator*)
+CL-USER> (ct:take 5 *square-generator*)
 (0 4 16 36 64)                                                          
                                                       
-CL-USER> (iter:take 5 *square-generator*)
+CL-USER> (ct:take 5 *square-generator*)
 (100 144 196 256 324)                                                                                                   
 ```
+
+Upcoming
+____________
+1. Unit tests
+2. Publishing to quicklisp
